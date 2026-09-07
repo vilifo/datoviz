@@ -214,6 +214,15 @@ DVZ_EXPORT VkPhysicalDevice dvz_device_physical_device(DvzDevice* device);
 DVZ_EXPORT const VkPhysicalDeviceFeatures* dvz_device_features10(DvzDevice* device);
 
 
+/**
+ * Return whether this logical device can use sparse 3D image residency.
+ *
+ * The device must have been created with sparseBinding and sparseResidencyImage3D
+ * enabled, and its main queue must support sparse binding.
+ */
+DVZ_EXPORT bool dvz_device_sparse_residency(DvzDevice* device);
+
+
 
 /**
  * Retrieve a queue from a role.

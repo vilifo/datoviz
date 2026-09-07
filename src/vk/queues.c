@@ -44,6 +44,8 @@ static inline uint32_t queue_role_mask(DvzQueueRole role)
         return VK_QUEUE_VIDEO_ENCODE_BIT_KHR;
     case DVZ_QUEUE_VIDEO_DECODE:
         return VK_QUEUE_VIDEO_DECODE_BIT_KHR;
+    case DVZ_QUEUE_SPARSE:
+        return VK_QUEUE_SPARSE_BINDING_BIT;
     default:
         return 0;
     }
@@ -80,6 +82,9 @@ static bool queue_flags_supports(VkQueueFlags f, DvzQueueRole role)
 
     case DVZ_QUEUE_VIDEO_DECODE:
         return (f & VK_QUEUE_VIDEO_DECODE_BIT_KHR) != 0;
+
+    case DVZ_QUEUE_SPARSE:
+        return (f & VK_QUEUE_SPARSE_BINDING_BIT) != 0;
 
     default:
         return false;
@@ -201,7 +206,7 @@ bool dvz_instance_gpu_queue_caps(DvzInstance* instance, uint32_t gpu_index, DvzQ
 
 
 
-void dvz_queues(DvzQueueCaps* qc, DvzQueues* queues)
+ void dvz_queues(DvzQueueCaps* qc, DvzQueues* queues)
 {
     ANN(qc);
     ANN(queues);
@@ -210,14 +215,13 @@ void dvz_queues(DvzQueueCaps* qc, DvzQueues* queues)
 
     // First, we find the main queue, let's define it as the first queue that supports
     // graphics+compute (and also transfer implicitly as per the Vulkan spec).
-
+    //
     // Then, for each non-main role, we go through all non-main queue families, and we find those
     // that support the role.
     // If there is none, we do nothing.
     // If there is one, we add that queue.
     // If there are 2+, we only keep those that have the minimum number of queue_flags_count(f)
     // and we take the first one among them.
-
 
     // ------------------------------------------------------------------------------------------
     // 1. Find the main queue: first family that supports GRAPHICS + COMPUTE.
@@ -238,6 +242,7 @@ void dvz_queues(DvzQueueCaps* qc, DvzQueues* queues)
         log_error("No queue family supports both graphics and compute!");
         return;
     }
+
     ASSERT(main_family >= 0);
     ASSERT(qc->queue_count[main_family] > 0);
 
@@ -248,34 +253,42 @@ void dvz_queues(DvzQueueCaps* qc, DvzQueues* queues)
         .is_main = true,
         .is_set = true,
     };
+
     queues->queue_count = 1;
     used[main_family] = 1;
 
-    // ------------------------------------------------------------------
-    // 2. For each other role, find the best queue family.
-    // ------------------------------------------------------------------
+    // ------------------------------------------------------------------------------------------
+    // 2. Find optional dedicated queues.
+    //
+    // IMPORTANT:
+    // DVZ_QUEUE_SPARSE is allowed to fall back to the main queue. We must NOT alias/copy the
+    // main queue into the sparse role here, because queue_count represents the number of
+    // actually-created queue handles and the existing queue tests depend on that invariant.
+    // ------------------------------------------------------------------------------------------
     for (uint32_t role = DVZ_QUEUE_COMPUTE; role < DVZ_QUEUE_COUNT; role++)
     {
         int best_idx = -1;
         uint32_t best_count = UINT32_MAX;
         uint32_t best_closeness = UINT32_MAX;
 
-        // Goes through all non-main roles.
         for (uint32_t i = 0; i < qc->family_count; i++)
         {
             if (qc->queue_count[i] == 0 || used[i] >= qc->queue_count[i])
                 continue;
+
+            // Optional roles are only assigned to a different queue family.
+            // If the main queue supports the role, dvz_queue_from_role() can fall back to it.
             if ((int)i == main_family)
                 continue;
 
             VkQueueFlags f = qc->flags[i];
+
             if (!queue_flags_supports(f, (DvzQueueRole)role))
                 continue;
 
-            // Here, this queue family is not main and supports the current role.
             uint32_t c = queue_flags_count(f);
-            uint32_t role_mask = queue_role_mask(role);
-            uint32_t closeness = queue_flags_count(f ^ role_mask); // how many bits differ
+            uint32_t role_mask = queue_role_mask((DvzQueueRole)role);
+            uint32_t closeness = queue_flags_count(f ^ role_mask);
 
             if (c < best_count || (c == best_count && closeness < best_closeness))
             {
@@ -288,13 +301,17 @@ void dvz_queues(DvzQueueCaps* qc, DvzQueues* queues)
         if (best_idx >= 0)
         {
             uint32_t queue_idx = used[best_idx];
+
             ASSERT(queue_idx < qc->queue_count[best_idx]);
+
             queues->queues[role] = (DvzQueue){
                 .family_idx = (uint32_t)best_idx,
                 .queue_idx = queue_idx,
                 .flags = qc->flags[best_idx],
+                .is_main = false,
                 .is_set = true,
             };
+
             queues->queue_count++;
             used[best_idx]++;
         }
@@ -336,21 +353,22 @@ DvzQueue* dvz_queue_from_role(DvzQueues* queues, DvzQueueRole role)
     if ((int)role < 0 || (int)role >= DVZ_QUEUE_COUNT)
         return NULL;
 
-    // If requesting the main queue, return it.
     DvzQueue* main = &queues->queues[DVZ_QUEUE_MAIN];
     ANN(main);
 
+    // If requesting the main queue, return it.
     if (role == DVZ_QUEUE_MAIN)
         return main;
 
-    // Otherwise, try to find a queue beyond main that supports the requested role.
-    DvzQueue* queue = NULL;
+    // First try queues that were explicitly selected for this role.
     for (uint32_t i = 0; i < queues->queue_count; i++)
     {
-        queue = &queues->queues[i];
+        DvzQueue* queue = &queues->queues[i];
         ANN(queue);
+
         if (queue == main)
             continue;
+
         if (dvz_queue_supports(queue, role))
         {
             log_trace("find queue #%d supporting role %d", i, (int)role);
@@ -358,7 +376,10 @@ DvzQueue* dvz_queue_from_role(DvzQueues* queues, DvzQueueRole role)
         }
     }
 
-    // Otherwise, return main if it supports the role, or NULL otherwise.
+    // Otherwise, the main queue may itself support the requested role.
+    //
+    // This is especially important for sparse binding: Vulkan does not require a dedicated
+    // sparse queue. A graphics/compute queue may also advertise VK_QUEUE_SPARSE_BINDING_BIT.
     if (dvz_queue_supports(main, role))
     {
         log_trace("return main queue supporting role %d", (int)role);
@@ -366,7 +387,6 @@ DvzQueue* dvz_queue_from_role(DvzQueues* queues, DvzQueueRole role)
     }
 
     log_debug("could not find a queue supporting role %d", role);
-
     return NULL;
 }
 

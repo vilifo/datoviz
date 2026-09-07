@@ -285,7 +285,7 @@ void _draw_raster_state_contract(
     else if (_scene_visual_desc_is_volume((DvzSceneVisualDescKind)facts->desc_kind))
     {
         *out_has_raster_state = true;
-        *out_cull_mode = DVZ_CULL_MODE_BACK;
+        *out_cull_mode = DVZ_CULL_MODE_FRONT;
         *out_front_face = DVZ_FRONT_FACE_CLOCKWISE;
     }
 }

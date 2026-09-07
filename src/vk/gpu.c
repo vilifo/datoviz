@@ -369,6 +369,19 @@ void dvz_gpu_probe_features(DvzGpu* gpu)
 
 
 
+bool dvz_instance_gpu_sparse_residency(DvzInstance* instance, uint32_t gpu_index)
+{
+    ANN(instance);
+    uint32_t count = 0;
+    DvzGpu* gpus = dvz_instance_gpus(instance, &count);
+    if (gpus == NULL || gpu_index >= count)
+        return false;
+    VkPhysicalDeviceFeatures* f = dvz_gpu_features10(&gpus[gpu_index]);
+    return f != NULL && f->sparseBinding && f->sparseResidencyImage3D;
+}
+
+
+
 VkPhysicalDeviceFeatures* dvz_gpu_features10(DvzGpu* gpu)
 {
     ANN(gpu);

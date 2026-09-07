@@ -746,6 +746,19 @@ const VkPhysicalDeviceFeatures* dvz_device_features10(DvzDevice* device)
 
 
 
+bool dvz_device_sparse_residency(DvzDevice* device)
+{
+    ANN(device);
+    DvzQueue* queue = dvz_device_queue(device, DVZ_QUEUE_SPARSE);
+    if (queue == NULL)
+        queue = dvz_device_queue(device, DVZ_QUEUE_MAIN);
+    return device->features.features.sparseBinding &&
+           device->features.features.sparseResidencyImage3D && queue != NULL &&
+           (queue->flags & VK_QUEUE_SPARSE_BINDING_BIT) != 0;
+}
+
+
+
 DvzQueue* dvz_device_queue(DvzDevice* device, DvzQueueRole role)
 {
     ANN(device);

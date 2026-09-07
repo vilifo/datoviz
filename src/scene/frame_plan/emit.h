@@ -47,6 +47,7 @@
 #define DRP2_MAX_FIXTURE_RESOURCES 64
 #define DRP2_RUNTIME_TRANSIENT_ID_BASE 10000
 #define DRP2_EMITTER_OBJECT_ID_BASE 5000
+#define DVZ_SCENE_COMMON_CACHE_CAPACITY (2 * DVZ_SCENE_MAX_PANELS)
 #define DVZ_SCENE_VOLUME_CACHE_CAPACITY DVZ_SCENE_MAX_VISUALS
 #define DVZ_SCENE_LABELS_CACHE_CAPACITY DVZ_SCENE_MAX_VISUALS
 #define DVZ_SCENE_LABELS_HIDDEN_VEC4_COUNT ((DVZ_LABELS_MAX_HIDDEN + 3u) / 4u)
@@ -90,6 +91,11 @@ struct DvzSceneVolumeUniform
     float value_range[4];
     float occlusion[4];
     float texture_params[4];
+    /* Isosurface render mode (DVZ_VOLUME_RENDER_ISOSURFACE). */
+    float iso_params[4];  /* threshold, mode (0=below,1=above), gradient step, use_value_color */
+    float iso_color[4];   /* flat base color rgba */
+    float iso_light[4];   /* light_dir.xyz, shininess */
+    float iso_material[4]; /* ambient, diffuse, specular, reserved */
 };
 
 struct ResourceId
@@ -148,6 +154,13 @@ struct DvzFramePlanEmitter
     uint32_t max_color_sample_count;
     uint32_t max_depth_sample_count;
 
+    /* Common cache: APPLY and FIXED slots are panel-specific once viewport is part of set 0. */
+    char mvp_panel_ids[DVZ_SCENE_COMMON_CACHE_CAPACITY][DVZ_SCENE_LABEL_SIZE];
+    DvzMVP mvp_cache[DVZ_SCENE_COMMON_CACHE_CAPACITY];
+    uint32_t mvp_panel_count;
+    char viewport_panel_ids[DVZ_SCENE_COMMON_CACHE_CAPACITY][DVZ_SCENE_LABEL_SIZE];
+    DvzSceneViewportUniform viewport_cache[DVZ_SCENE_COMMON_CACHE_CAPACITY];
+    uint32_t viewport_panel_count;
     char volume_ids[DVZ_SCENE_VOLUME_CACHE_CAPACITY][DVZ_SCENE_LABEL_SIZE];
     DvzSceneVolumeUniform volume_cache[DVZ_SCENE_VOLUME_CACHE_CAPACITY];
     uint32_t volume_count;
@@ -175,6 +188,11 @@ void _emitter_state_commit(
 void _emitter_state_discard(DvzFramePlanEmitter* candidate);
 
 uint64_t _emitter_next_transient_id(DvzFramePlanEmitter* emitter);
+
+DvzMVP* _emitter_mvp_slot(DvzFramePlanEmitter* emitter, const char* key);
+
+DvzSceneViewportUniform*
+_emitter_viewport_slot(DvzFramePlanEmitter* emitter, const char* key);
 
 DvzSceneVolumeUniform*
 _emitter_volume_slot(DvzFramePlanEmitter* emitter, const char* key);

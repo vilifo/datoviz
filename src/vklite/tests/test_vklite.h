@@ -111,6 +111,7 @@ int test_vklite_buffer_views(TstContext* suite, const TstCase* tstitem);
 int test_vklite_buffer_create_requires_destroy(TstContext* suite, const TstCase* tstitem);
 
 int test_vklite_images_1(TstContext* suite, const TstCase* tstitem);
+int test_vklite_sparse_image_1(TstContext* suite, const TstCase* tstitem);
 
 int test_vklite_images_create_requires_destroy(TstContext* suite, const TstCase* tstitem);
 

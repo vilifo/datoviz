@@ -41,6 +41,7 @@ struct DvzImages
 
     VkImage vk_images[DVZ_MAX_IMAGES];
     DvzAllocation* allocs[DVZ_MAX_IMAGES];
+    bool sparse;
 };
 
 

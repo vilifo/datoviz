@@ -60,13 +60,19 @@ bool _scene_volume_visual_pipeline_desc(
     if (!_scene_visual_pass_caps_from_desc(visual, alpha_mode, controller_mode, &caps))
         return false;
 
+    bool isosurface = visual->volume_state.render_mode == DVZ_VOLUME_RENDER_ISOSURFACE;
+
     out->topology = visual->topology;
     out->has_depth_state = pass_needs_depth;
     out->needs_scene_occlusion_layout = visual->scene_occluded;
     if (pass_needs_depth)
     {
-        out->depth_write_enabled = false;
-        out->depth_compare_op = DVZ_COMPARE_OP_ALWAYS;
+        /* The isosurface render mode is opaque and raster-independent: the fragment shader
+         * writes gl_FragDepth from the raymarch hit point, so, unlike the translucent
+         * composite/MIP/slice render modes, it must participate in real depth testing and
+         * writes so it correctly occludes and is occluded by other opaque geometry. */
+        out->depth_write_enabled = isosurface;
+        out->depth_compare_op = isosurface ? DVZ_COMPARE_OP_LESS : DVZ_COMPARE_OP_ALWAYS;
     }
     out->vertex_buffer_count = 2;
     out->binding_count = 2;
@@ -76,7 +82,13 @@ bool _scene_volume_visual_pipeline_desc(
     out->needs_common_layout = caps.uses_common_set;
     out->needs_volume_layout = caps.uses_volume_set;
     out->has_raster_state = true;
-    out->cull_mode = DVZ_CULL_MODE_BACK;
+    /* Cull the near (front) faces, not the far (back) ones: rendering the box's far side keeps
+     * it rasterized even when the camera moves inside the bounds (e.g. zooming in past the
+     * volume's extent), which is required for the raymarch — which always starts from the true
+     * camera position via camera_object() — to actually run. Culling the back faces instead
+     * would rasterize nothing once the camera crosses into the box, since the near faces get
+     * near-plane clipped, and the visual would disappear. */
+    out->cull_mode = DVZ_CULL_MODE_FRONT;
     out->front_face = DVZ_FRONT_FACE_CLOCKWISE;
     return true;
 }

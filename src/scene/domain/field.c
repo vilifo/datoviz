@@ -472,3 +472,40 @@ DvzId dvz_sampled_field_id(const DvzSampledField* field)
 {
     return field != NULL && field->scene != NULL ? field->id : DVZ_ID_NONE;
 }
+
+
+
+/**
+ * Return the field's own retained CPU data buffer, for building a zero-copy view over it
+ * instead of keeping a separate caller-owned copy alongside it.
+ *
+ * The returned pointer is stable (does not move) across repeated dvz_sampled_field_set_data()
+ * calls at the *same* extent (set_data reuses the existing allocation in place), but is
+ * invalidated by dvz_sampled_field_resize() (which always allocates a new buffer and frees the
+ * old one) or dvz_sampled_field_destroy(). The caller must not free this pointer, must not use
+ * it after either of those calls, and must not write through it concurrently with any Datoviz
+ * render/emit call that reads the field (there is no internal synchronization for this path) --
+ * treat any in-place mutation the same as an external, unsynchronized producer, matching the
+ * existing caution already documented for dvz_sampled_field_set_buffer()/_invalidate(). Returns
+ * NULL/0 (not an error) if the field has no data yet, or is externally-buffer-backed (in which
+ * case it owns no CPU-retained copy of its own to expose).
+ *
+ * @param field the sampled field
+ * @param out_ptr output data pointer, or NULL if unavailable
+ * @param out_size output size in bytes of the buffer *out_ptr points to
+ * @return DVZ_OK on success, DVZ_ERROR if field is NULL
+ */
+DvzResult dvz_sampled_field_data_ptr(const DvzSampledField* field, void** out_ptr, uint64_t* out_size)
+{
+    if (field == NULL || out_ptr == NULL || out_size == NULL)
+        return DVZ_ERROR;
+    if (field->buffer != NULL)
+    {
+        *out_ptr = NULL;
+        *out_size = 0;
+        return DVZ_OK;
+    }
+    *out_ptr = field->data;
+    *out_size = field->data != NULL ? field->data_size : 0;
+    return DVZ_OK;
+}

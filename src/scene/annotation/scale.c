@@ -110,7 +110,16 @@ void _scene_mark_scale_dirty(DvzScale* scale)
              _scene_sample_profile_is_integer_label(&profile)))
         {
             _scene_visual_texture_mark_clean(visual);
-            _visual_family_state(visual)->texture.dirty = true;
+            if (visual->type != DVZ_VISUAL_TYPE_VOLUME)
+            {
+                /* Volume visuals sample color through a separate, small transfer-function
+                 * texture that already regenerates unconditionally whenever it's prepared
+                 * (_volume_transfer_texture_payload_if_needed has no dirty gate), so it does
+                 * not need this flag. Setting it here would only re-trigger a full re-upload
+                 * of the (potentially very large) source 3D field texture, whose own bytes
+                 * never changed -- only the colorization did. */
+                _visual_family_state(visual)->texture.dirty = true;
+            }
             _scene_texture_bump_version(visual);
             _scene_notify_visual_changed(visual);
         }

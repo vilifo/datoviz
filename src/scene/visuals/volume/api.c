@@ -146,6 +146,23 @@ void _volume_state_default(DvzVolumeState* state)
     state->alpha_stops[0] = (DvzVolumeAlphaStop){.position = 0.0, .alpha = 0.0f};
     state->alpha_stops[1] = (DvzVolumeAlphaStop){.position = 1.0, .alpha = 1.0f};
     state->alpha_stop_count = 2;
+
+    /* Isosurface render mode defaults. */
+    state->iso_threshold = 0.5;
+    state->iso_mode = DVZ_ISOSURFACE_MODE_BELOW;
+    state->iso_color[0] = 0.75f;
+    state->iso_color[1] = 0.75f;
+    state->iso_color[2] = 0.80f;
+    state->iso_color[3] = 1.0f;
+    state->iso_use_value_color = false;
+    state->iso_gradient_step = 0.0f;
+    state->iso_light_dir[0] = 0.3f;
+    state->iso_light_dir[1] = 0.5f;
+    state->iso_light_dir[2] = 1.0f;
+    state->iso_ambient = 0.25f;
+    state->iso_diffuse = 0.75f;
+    state->iso_specular = 0.35f;
+    state->iso_shininess = 32.0f;
 }
 
 
@@ -167,6 +184,29 @@ DvzVisual* dvz_volume(DvzScene* scene, uint32_t flags)
     _visual_family_state(visual)->topology = DVZ_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     if (_volume_apply_bounds_geometry(visual) != 0)
         log_error("dvz_volume: failed to apply default bounds");
+    return visual;
+}
+
+
+
+/**
+ * Create an isosurface visual.
+ *
+ * This is a volume visual preconfigured in DVZ_VOLUME_RENDER_ISOSURFACE render mode. It shares
+ * the exact same retained state, box-proxy geometry, and every other volume setter; only the
+ * render mode differs from a plain `dvz_volume()`.
+ *
+ * @param scene the scene
+ * @param flags variant flags
+ * @return the visual, or NULL on allocation failure
+ */
+DvzVisual* dvz_isosurface(DvzScene* scene, uint32_t flags)
+{
+    ANN(scene);
+    DvzVisual* visual = dvz_volume(scene, flags);
+    if (visual == NULL)
+        return NULL;
+    _visual_family_state(visual)->volume.render_mode = DVZ_VOLUME_RENDER_ISOSURFACE;
     return visual;
 }
 
@@ -248,7 +288,7 @@ DvzResult dvz_volume_set_render_mode(DvzVisual* visual, DvzVolumeRenderMode mode
         return -1;
     }
     if (mode != DVZ_VOLUME_RENDER_SLICE && mode != DVZ_VOLUME_RENDER_MIP &&
-        mode != DVZ_VOLUME_RENDER_COMPOSITE)
+        mode != DVZ_VOLUME_RENDER_COMPOSITE && mode != DVZ_VOLUME_RENDER_ISOSURFACE)
     {
         log_error("unsupported volume render mode %d", (int)mode);
         return -1;
@@ -695,6 +735,191 @@ DvzResult dvz_volume_clear_clipping(DvzVisual* visual)
     _visual_family_state(visual)->volume.clip_plane_normal[0] = 1.0;
     _visual_family_state(visual)->volume.clip_plane_normal[1] = 0.0;
     _visual_family_state(visual)->volume.clip_plane_normal[2] = 0.0;
+    _visual_bump_version(&_visual_family_state(visual)->volume.version);
+    _scene_notify_visual_changed(visual);
+    return 0;
+}
+
+
+
+/**
+ * Set the scalar threshold defining the isosurface.
+ *
+ * @param visual the isosurface visual
+ * @param threshold the scalar threshold, in the same units as the field's raw value range
+ * @param mode whether the surface is where the value crosses below or above the threshold
+ * @return 0 on success, -1 on error
+ */
+DvzResult dvz_volume_set_isosurface_threshold(
+    DvzVisual* visual, double threshold, DvzIsosurfaceMode mode)
+{
+    ANN(visual);
+    if (visual->type != DVZ_VISUAL_TYPE_VOLUME)
+    {
+        log_error("dvz_volume_set_isosurface_threshold requires a volume/isosurface visual");
+        return -1;
+    }
+    if (!isfinite(threshold))
+    {
+        log_error("isosurface threshold must be finite");
+        return -1;
+    }
+    if (mode != DVZ_ISOSURFACE_MODE_BELOW && mode != DVZ_ISOSURFACE_MODE_ABOVE)
+    {
+        log_error("unsupported isosurface mode %d", (int)mode);
+        return -1;
+    }
+    if (!_scene_visual_mutation_allowed(visual->scene, "set isosurface threshold"))
+        return -1;
+    _visual_family_state(visual)->volume.iso_threshold = threshold;
+    _visual_family_state(visual)->volume.iso_mode = mode;
+    _visual_bump_version(&_visual_family_state(visual)->volume.version);
+    _scene_notify_visual_changed(visual);
+    return 0;
+}
+
+
+
+/**
+ * Set the flat base color used to shade the isosurface.
+ *
+ * @param visual the isosurface visual
+ * @param color RGBA color in [0, 1]
+ * @return 0 on success, -1 on error
+ */
+DvzResult dvz_volume_set_isosurface_color(DvzVisual* visual, const float color[4])
+{
+    ANN(visual);
+    ANN(color);
+    if (visual->type != DVZ_VISUAL_TYPE_VOLUME)
+    {
+        log_error("dvz_volume_set_isosurface_color requires a volume/isosurface visual");
+        return -1;
+    }
+    for (uint32_t i = 0; i < 4; i++)
+    {
+        if (!isfinite(color[i]) || color[i] < 0.0f || color[i] > 1.0f)
+        {
+            log_error("isosurface color components must be finite and in [0, 1]");
+            return -1;
+        }
+    }
+    if (!_scene_visual_mutation_allowed(visual->scene, "set isosurface color"))
+        return -1;
+    for (uint32_t i = 0; i < 4; i++)
+        _visual_family_state(visual)->volume.iso_color[i] = color[i];
+    _visual_bump_version(&_visual_family_state(visual)->volume.version);
+    _scene_notify_visual_changed(visual);
+    return 0;
+}
+
+
+
+/**
+ * Enable or disable coloring the isosurface from the transfer texture sampled at the hit value.
+ *
+ * @param visual the isosurface visual
+ * @param enabled whether to use value-based coloring
+ * @return 0 on success, -1 on error
+ */
+DvzResult dvz_volume_set_isosurface_value_color(DvzVisual* visual, bool enabled)
+{
+    ANN(visual);
+    if (visual->type != DVZ_VISUAL_TYPE_VOLUME)
+    {
+        log_error("dvz_volume_set_isosurface_value_color requires a volume/isosurface visual");
+        return -1;
+    }
+    if (!_scene_visual_mutation_allowed(visual->scene, "set isosurface value color"))
+        return -1;
+    _visual_family_state(visual)->volume.iso_use_value_color = enabled;
+    _visual_bump_version(&_visual_family_state(visual)->volume.version);
+    _scene_notify_visual_changed(visual);
+    return 0;
+}
+
+
+
+/**
+ * Set the Phong material coefficients and key light direction used to shade the isosurface.
+ *
+ * @param visual the isosurface visual
+ * @param light_dir key light direction, in the volume's object/local space (need not be normalized)
+ * @param ambient ambient coefficient in [0, 1]
+ * @param diffuse diffuse coefficient in [0, 1]
+ * @param specular specular coefficient in [0, 1]
+ * @param shininess Phong shininess exponent, > 0
+ * @return 0 on success, -1 on error
+ */
+DvzResult dvz_volume_set_isosurface_material(
+    DvzVisual* visual, const float light_dir[3], float ambient, float diffuse, float specular,
+    float shininess)
+{
+    ANN(visual);
+    ANN(light_dir);
+    if (visual->type != DVZ_VISUAL_TYPE_VOLUME)
+    {
+        log_error("dvz_volume_set_isosurface_material requires a volume/isosurface visual");
+        return -1;
+    }
+    float norm2 = 0.0f;
+    for (uint32_t i = 0; i < 3; i++)
+    {
+        if (!isfinite(light_dir[i]))
+        {
+            log_error("isosurface light direction must be finite");
+            return -1;
+        }
+        norm2 += light_dir[i] * light_dir[i];
+    }
+    if (norm2 <= 0.0f || !isfinite(ambient) || !isfinite(diffuse) || !isfinite(specular) ||
+        !isfinite(shininess) || ambient < 0.0f || diffuse < 0.0f || specular < 0.0f ||
+        shininess <= 0.0f)
+    {
+        log_error("isosurface material parameters must be finite, non-negative, "
+                   "shininess > 0, and light direction non-zero");
+        return -1;
+    }
+    if (!_scene_visual_mutation_allowed(visual->scene, "set isosurface material"))
+        return -1;
+    float inv_norm = 1.0f / sqrtf(norm2);
+    for (uint32_t i = 0; i < 3; i++)
+        _visual_family_state(visual)->volume.iso_light_dir[i] = light_dir[i] * inv_norm;
+    _visual_family_state(visual)->volume.iso_ambient = ambient;
+    _visual_family_state(visual)->volume.iso_diffuse = diffuse;
+    _visual_family_state(visual)->volume.iso_specular = specular;
+    _visual_family_state(visual)->volume.iso_shininess = shininess;
+    _visual_bump_version(&_visual_family_state(visual)->volume.version);
+    _scene_notify_visual_changed(visual);
+    return 0;
+}
+
+
+
+/**
+ * Set the normalized-UVW step used for the central-difference gradient (surface normal)
+ * estimation. Pass 0 to use an automatic step derived from the bound field's resolution.
+ *
+ * @param visual the isosurface visual
+ * @param step gradient sampling step in normalized texture coordinates, >= 0
+ * @return 0 on success, -1 on error
+ */
+DvzResult dvz_volume_set_isosurface_gradient_step(DvzVisual* visual, float step)
+{
+    ANN(visual);
+    if (visual->type != DVZ_VISUAL_TYPE_VOLUME)
+    {
+        log_error("dvz_volume_set_isosurface_gradient_step requires a volume/isosurface visual");
+        return -1;
+    }
+    if (!isfinite(step) || step < 0.0f)
+    {
+        log_error("isosurface gradient step must be finite and non-negative");
+        return -1;
+    }
+    if (!_scene_visual_mutation_allowed(visual->scene, "set isosurface gradient step"))
+        return -1;
+    _visual_family_state(visual)->volume.iso_gradient_step = step;
     _visual_bump_version(&_visual_family_state(visual)->volume.version);
     _scene_notify_visual_changed(visual);
     return 0;

@@ -13,6 +13,7 @@ target_include_directories(datoviz_vklite
         ${PROJECT_SOURCE_DIR}/src/common
         ${PROJECT_SOURCE_DIR}/external
         ${PROJECT_SOURCE_DIR}/external/volk
+        ${PROJECT_SOURCE_DIR}/src/vk
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
 )

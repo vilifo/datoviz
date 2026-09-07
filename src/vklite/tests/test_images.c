@@ -19,6 +19,7 @@
 #include "datoviz/vk/device.h"
 #include "datoviz/vk/gpu_ctx.h"
 #include "datoviz/vklite/images.h"
+#include "datoviz/vklite/sparse.h"
 #include "test_vklite.h"
 #include "testing.h"
 #include "vulkan_core.h"
@@ -109,6 +110,89 @@ int test_vklite_images_1(TstContext* suite, const TstCase* tstitem)
 }
 
 
+
+int test_vklite_sparse_image_1(TstContext* suite, const TstCase* tstitem)
+{
+    ANN(suite);
+    ANN(tstitem);
+
+    // Bootstrap.
+    DvzGpuCtxConfig cfg = dvz_testing_gpu_ctx_config(suite);
+    DvzGpuCtx* ctx = dvz_gpu_ctx(&cfg);
+    ANN(ctx);
+
+    DvzDevice* device = dvz_gpu_ctx_device(ctx);
+    VkPhysicalDevice pdevice = VK_NULL_HANDLE;
+    DvzInstance* instance = dvz_gpu_ctx_instance(ctx);
+    uint32_t gpu_index = dvz_gpu_ctx_gpu_index(ctx);
+    bool sparse_supported =
+        instance != NULL && gpu_index != UINT32_MAX &&
+        dvz_instance_gpu_handle(instance, gpu_index, &pdevice);
+    VkPhysicalDeviceFeatures features = {0};
+    if (sparse_supported)
+    {
+        vkGetPhysicalDeviceFeatures(pdevice, &features);
+        sparse_supported = features.sparseBinding && features.sparseResidencyImage3D;
+    }
+    if (!sparse_supported)
+    {
+        tst_skip(suite, "sparse 3D image residency is unavailable on the selected device");
+        dvz_gpu_ctx_destroy(ctx);
+        return 0;
+    }
+
+    // Make the logical image exactly two pages wide/high/deep. One page of memory is enough
+    // to force the residency manager to evict the previous page when the second page is needed.
+    DvzSparseImage* probe = dvz_sparse_image_create(
+        device, dvz_gpu_ctx_alloc(ctx), VK_FORMAT_R8_UNORM, 64, 64, 64,
+        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 0);
+    ANN(probe);
+    uint32_t g[3] = {0};
+    dvz_sparse_image_granularity(probe, g);
+    AT(g[0] > 0 && g[1] > 0 && g[2] > 0);
+    VkDeviceSize page_size = dvz_sparse_image_page_size(probe);
+    AT(page_size > 0);
+    dvz_sparse_image_destroy(probe);
+
+    uint32_t width = 2 * g[0];
+    uint32_t height = 2 * g[1];
+    uint32_t depth = 2 * g[2];
+    DvzSparseImage* sparse = dvz_sparse_image_create(
+        device, dvz_gpu_ctx_alloc(ctx), VK_FORMAT_R8_UNORM, width, height, depth,
+        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, page_size);
+    ANN(sparse);
+
+    // A new sparse image starts completely non-resident.
+    AT(dvz_sparse_image_resident_pages(sparse) == 0);
+    AT(!dvz_sparse_image_page_resident(sparse, 0, 0, 0));
+
+    // Bind the first page through vkQueueBindSparse.
+    AT(dvz_sparse_image_ensure_region(sparse, 0, 0, 0, 1, 1, 1));
+    AT(dvz_sparse_image_resident_pages(sparse) == 1);
+    AT(dvz_sparse_image_page_resident(sparse, 0, 0, 0));
+
+    // Re-requesting the same page must not allocate/bind a second page.
+    AT(dvz_sparse_image_ensure_region(sparse, 1, 1, 1, 1, 1, 1));
+    AT(dvz_sparse_image_resident_pages(sparse) == 1);
+    AT(dvz_sparse_image_page_resident(sparse, 0, 0, 0));
+
+    // Request a different page. The one-page budget must evict the old page and bind the new one.
+    AT(dvz_sparse_image_ensure_region(sparse, g[0], 0, 0, 1, 1, 1));
+    AT(dvz_sparse_image_resident_pages(sparse) == 1);
+    AT(!dvz_sparse_image_page_resident(sparse, 0, 0, 0));
+    AT(dvz_sparse_image_page_resident(sparse, 1, 0, 0));
+
+    // Request the original page again; this exercises another unbind + bind cycle.
+    AT(dvz_sparse_image_ensure_region(sparse, 0, 0, 0, 1, 1, 1));
+    AT(dvz_sparse_image_resident_pages(sparse) == 1);
+    AT(dvz_sparse_image_page_resident(sparse, 0, 0, 0));
+    AT(!dvz_sparse_image_page_resident(sparse, 1, 0, 0));
+
+    dvz_sparse_image_destroy(sparse);
+    uint32_t err_count = dvz_gpu_ctx_error_count(ctx);
+    dvz_gpu_ctx_destroy(ctx);
+    return err_count > 0;
+}
 
 int test_vklite_images_create_requires_destroy(TstContext* suite, const TstCase* tstitem)
 {

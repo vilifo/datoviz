@@ -79,6 +79,7 @@ typedef enum DvzQueueRole
     DVZ_QUEUE_TRANSFER,
     DVZ_QUEUE_VIDEO_ENCODE,
     DVZ_QUEUE_VIDEO_DECODE,
+    DVZ_QUEUE_SPARSE,
     DVZ_QUEUE_COUNT,
 } DvzQueueRole;
 

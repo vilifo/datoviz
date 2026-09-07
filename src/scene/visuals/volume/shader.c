@@ -50,32 +50,27 @@ bool _scene_volume_visual_shader_desc(
     if (visual->kind == DVZ_SCENE_VISUAL_DESC_VOLUME)
     {
         bool mip = visual->volume_state.render_mode == DVZ_VOLUME_RENDER_MIP;
+        bool isosurface = visual->volume_state.render_mode == DVZ_VOLUME_RENDER_ISOSURFACE;
+        const char* variant = composite    ? "composite"
+                              : mip         ? "mip"
+                              : isosurface  ? "isosurface"
+                                            : "slice";
         dvz_snprintf(out->vertex_key, sizeof(out->vertex_key), "_vs_vol_slice%s", format_tag);
         dvz_snprintf(
-            out->fragment_key, sizeof(out->fragment_key),
-            composite ? "_fs_vol_composite%s"
-            : mip     ? "_fs_vol_mip%s"
-                      : "_fs_vol_slice%s",
-            format_tag);
+            out->fragment_key, sizeof(out->fragment_key), "_fs_vol_%s%s", variant, format_tag);
         dvz_snprintf(
-            out->pipeline_key, sizeof(out->pipeline_key),
-            composite ? "_pipe_vol_composite%s"
-            : mip     ? "_pipe_vol_mip%s"
-                      : "_pipe_vol_slice%s",
-            format_tag);
-        DvzSceneBuiltinShader shader = composite ? DVZ_SCENE_BUILTIN_SHADER_VOLUME_COMPOSITE
-                                       : mip     ? DVZ_SCENE_BUILTIN_SHADER_VOLUME_MIP
-                                                 : DVZ_SCENE_BUILTIN_SHADER_VOLUME_SLICE;
+            out->pipeline_key, sizeof(out->pipeline_key), "_pipe_vol_%s%s", variant, format_tag);
+        DvzSceneBuiltinShader shader = composite   ? DVZ_SCENE_BUILTIN_SHADER_VOLUME_COMPOSITE
+                                        : mip       ? DVZ_SCENE_BUILTIN_SHADER_VOLUME_MIP
+                                        : isosurface ? DVZ_SCENE_BUILTIN_SHADER_VOLUME_ISOSURFACE
+                                                     : DVZ_SCENE_BUILTIN_SHADER_VOLUME_SLICE;
         _scene_shader_desc_set_builtin(out, shader);
-        _scene_shader_desc_set_identity(
-            out, "scene.volume",
-            composite ? "composite"
-            : mip     ? "mip"
-                      : "slice");
+        _scene_shader_desc_set_identity(out, "scene.volume", variant);
         out->vertex_spirv_key = "volume_slice_vert";
-        out->fragment_spirv_key = composite ? "volume_composite_frag"
-                                  : mip     ? "volume_mip_frag"
-                                            : "volume_slice_frag";
+        out->fragment_spirv_key = composite    ? "volume_composite_frag"
+                                   : mip        ? "volume_mip_frag"
+                                   : isosurface ? "volume_isosurface_frag"
+                                                : "volume_slice_frag";
         return true;
     }
 

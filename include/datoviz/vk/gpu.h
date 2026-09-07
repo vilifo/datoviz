@@ -92,5 +92,15 @@ DVZ_EXPORT bool dvz_instance_gpu_handle(
     DvzInstance* instance, uint32_t gpu_index, VkPhysicalDevice* out_pdevice);
 
 
+/**
+ * Return whether a physical device supports sparse 3D image residency.
+ *
+ * This checks the core Vulkan 1.0 sparseBinding and sparseResidencyImage3D
+ * features. The queue-family requirement is checked separately by the device.
+ */
+DVZ_EXPORT bool dvz_instance_gpu_sparse_residency(
+    DvzInstance* instance, uint32_t gpu_index);
+
+
 
 EXTERN_C_OFF

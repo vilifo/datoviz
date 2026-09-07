@@ -4092,4 +4092,92 @@ DVZ_EXPORT DvzResult dvz_volume_clear_clipping(DvzVisual* visual);
 DVZ_EXPORT const DvzVolumeState* dvz_volume_state(const DvzVisual* visual);
 
 
+/**
+ * Create an isosurface visual.
+ *
+ * An isosurface visual is a volume visual preconfigured in
+ * `DVZ_VOLUME_RENDER_ISOSURFACE` render mode: instead of compositing the whole field, the
+ * fragment shader raymarches the proxy box and stops at the first point where the sampled
+ * scalar value crosses a threshold, then shades that point like an opaque, lit surface (Phong
+ * shading from a gradient-estimated normal), similar to how a mesh visual is rendered. Unlike
+ * the translucent volume render modes, the isosurface writes real depth into the shared depth
+ * buffer, so it correctly occludes and is occluded by other opaque geometry (e.g. a mesh) in
+ * the scene.
+ *
+ * Bind a 3D scalar field with `dvz_visual_set_field(visual, "field", field)` as with
+ * `dvz_volume()`. All other volume setters (bounds, axis mapping, value range, clipping box and
+ * plane, sampling mode) apply unchanged; use `dvz_volume_set_isosurface_threshold()` and
+ * `dvz_volume_set_isosurface_material()` to configure the isosurface-specific parameters.
+ *
+ * @param scene the scene
+ * @param flags variant flags
+ * @return the visual
+ */
+DVZ_EXPORT DvzVisual* dvz_isosurface(DvzScene* scene, uint32_t flags);
+
+
+/**
+ * Set the scalar threshold defining the isosurface.
+ *
+ * @param visual the isosurface visual (or a volume visual in isosurface render mode)
+ * @param threshold the scalar threshold, in the same units as the field's raw value range
+ * @param mode whether the surface is where the value crosses below or above the threshold
+ * @return 0 on success, -1 on error
+ */
+DVZ_EXPORT DvzResult dvz_volume_set_isosurface_threshold(
+    DvzVisual* visual, double threshold, DvzIsosurfaceMode mode);
+
+
+/**
+ * Set the flat base color used to shade the isosurface.
+ *
+ * Ignored if a value-based color has been enabled with
+ * `dvz_volume_set_isosurface_value_color()`.
+ *
+ * @param visual the isosurface visual
+ * @param color RGBA color in [0, 1]
+ * @return 0 on success, -1 on error
+ */
+DVZ_EXPORT DvzResult dvz_volume_set_isosurface_color(DvzVisual* visual, const float color[4]);
+
+
+/**
+ * Enable or disable coloring the isosurface from the transfer/colormap texture sampled at the
+ * hit value (set via `dvz_volume_set_value_range()` and a transfer texture as with scalar
+ * volumes), instead of a flat color.
+ *
+ * @param visual the isosurface visual
+ * @param enabled whether to use value-based coloring
+ * @return 0 on success, -1 on error
+ */
+DVZ_EXPORT DvzResult dvz_volume_set_isosurface_value_color(DvzVisual* visual, bool enabled);
+
+
+/**
+ * Set the Phong material coefficients and key light direction used to shade the isosurface.
+ *
+ * @param visual the isosurface visual
+ * @param light_dir key light direction, in the volume's object/local space (need not be normalized)
+ * @param ambient ambient coefficient in [0, 1]
+ * @param diffuse diffuse coefficient in [0, 1]
+ * @param specular specular coefficient in [0, 1]
+ * @param shininess Phong shininess exponent, > 0
+ * @return 0 on success, -1 on error
+ */
+DVZ_EXPORT DvzResult dvz_volume_set_isosurface_material(
+    DvzVisual* visual, const float light_dir[3], float ambient, float diffuse, float specular,
+    float shininess);
+
+
+/**
+ * Set the normalized-UVW step used for the central-difference gradient (surface normal)
+ * estimation. Pass 0 to use an automatic step derived from the bound field's resolution.
+ *
+ * @param visual the isosurface visual
+ * @param step gradient sampling step in normalized texture coordinates, >= 0
+ * @return 0 on success, -1 on error
+ */
+DVZ_EXPORT DvzResult dvz_volume_set_isosurface_gradient_step(DvzVisual* visual, float step);
+
+
 EXTERN_C_OFF

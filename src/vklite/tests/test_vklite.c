@@ -94,6 +94,7 @@ int test_vklite(TstSuite* suite)
     TST_VKLITE_CASE(test_vklite_buffer_views);
     TST_VKLITE_CASE(test_vklite_buffer_create_requires_destroy);
     TST_VKLITE_CASE(test_vklite_images_1);
+    TST_VKLITE_CASE(test_vklite_sparse_image_1);
     TST_VKLITE_CASE(test_vklite_images_create_requires_destroy);
     TST_VKLITE_CASE(test_vklite_descriptors_1);
     TST_VKLITE_CASE(test_vklite_rendering_reset);

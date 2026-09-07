@@ -22,6 +22,7 @@
 #include "_vk_utils.h"
 #include "_assertions.h"
 #include "_images.h"
+#include "_device.h"
 #include "_log.h"
 #include "obj.h"
 #include "datoviz/vk/device.h"
@@ -294,32 +295,60 @@ int dvz_images_create(DvzImages* img)
     }
 
     int out = 0;
-    for (uint32_t i = 0; i < img->count; i++)
+    img->sparse = (img->info.flags & VK_IMAGE_CREATE_SPARSE_BINDING_BIT) != 0;
+    if (img->sparse)
     {
-        if (img->allocs[i] == NULL)
+        const VkPhysicalDeviceFeatures* features = dvz_device_features10(device);
+        if (features == NULL || !features->sparseBinding || !features->sparseResidencyImage3D)
         {
-            img->allocs[i] = dvz_allocation_create();
-            ANN(img->allocs[i]);
+            log_error("sparse image creation requested but the device does not support sparse 3D residency");
+            return 1;
         }
-        dvz_allocation_set_flags(img->allocs[i], img->req_alloc_flags);
-        out = dvz_allocator_image(
-            allocator, &img->info, img->req_alloc_flags, img->allocs[i], &img->vk_images[i]);
-        if (out != 0)
+        if (img->info.imageType != VK_IMAGE_TYPE_3D ||
+            (img->info.flags & VK_IMAGE_CREATE_SPARSE_RESIDENCY_BIT) == 0)
         {
-            for (uint32_t j = 0; j <= i; j++)
+            log_error("Datoviz sparse images currently require 3D sparse residency images");
+            return 1;
+        }
+        for (uint32_t i = 0; i < img->count; i++)
+        {
+            out = (int)vkCreateImage(device->vk_device, &img->info, NULL, &img->vk_images[i]);
+            if (out != VK_SUCCESS)
             {
-                if (img->vk_images[j] != VK_NULL_HANDLE)
-                {
-                    dvz_allocator_destroy_image(allocator, img->allocs[j], img->vk_images[j]);
-                }
-                img->vk_images[j] = VK_NULL_HANDLE;
-                if (img->allocs[j] != NULL)
-                {
-                    dvz_allocation_free(img->allocs[j]);
-                    img->allocs[j] = NULL;
-                }
+                for (uint32_t j = 0; j <= i; j++)
+                    if (img->vk_images[j] != VK_NULL_HANDLE)
+                        vkDestroyImage(device->vk_device, img->vk_images[j], NULL);
+                return out;
             }
-            return out;
+        }
+    }
+    else
+    {
+        for (uint32_t i = 0; i < img->count; i++)
+        {
+            if (img->allocs[i] == NULL)
+            {
+                img->allocs[i] = dvz_allocation_create();
+                ANN(img->allocs[i]);
+            }
+            dvz_allocation_set_flags(img->allocs[i], img->req_alloc_flags);
+            out = dvz_allocator_image(
+                allocator, &img->info, img->req_alloc_flags, img->allocs[i], &img->vk_images[i]);
+            if (out != 0)
+            {
+                for (uint32_t j = 0; j <= i; j++)
+                {
+                    if (img->vk_images[j] != VK_NULL_HANDLE)
+                        dvz_allocator_destroy_image(allocator, img->allocs[j], img->vk_images[j]);
+                    img->vk_images[j] = VK_NULL_HANDLE;
+                    if (img->allocs[j] != NULL)
+                    {
+                        dvz_allocation_free(img->allocs[j]);
+                        img->allocs[j] = NULL;
+                    }
+                }
+                return out;
+            }
         }
     }
 
@@ -383,7 +412,12 @@ void dvz_images_destroy(DvzImages* img)
     log_trace("destroying images...");
     for (uint32_t i = 0; i < img->count; i++)
     {
-        if (img->allocs[i] != NULL)
+        if (img->sparse)
+        {
+            if (img->vk_images[i] != VK_NULL_HANDLE)
+                vkDestroyImage(img->device->vk_device, img->vk_images[i], NULL);
+        }
+        else if (img->allocs[i] != NULL)
         {
             dvz_allocator_destroy_image(allocator, img->allocs[i], img->vk_images[i]);
             dvz_allocation_free(img->allocs[i]);

@@ -340,6 +340,24 @@ DvzGpuCtx* dvz_gpu_ctx(const DvzGpuCtxConfig* cfg)
     {
         dvz_device_config_set_features10(&dcfg, &cfg->features10);
     }
+
+    /* Sparse 3D residency is a core feature but is optional. Enable it whenever the
+     * selected physical device advertises it so scene volumes can opt in later without
+     * requiring a second logical device. Never request an unsupported feature. */
+    if (dvz_instance_gpu_sparse_residency(ctx->instance, cfg->gpu_index))
+    {
+        VkPhysicalDeviceFeatures sparse_features = {0};
+        sparse_features.sparseBinding = true;
+        sparse_features.sparseResidencyImage3D = true;
+        VkPhysicalDeviceFeatures merged = sparse_features;
+        if (cfg->has_features10)
+        {
+            merged = cfg->features10;
+            merged.sparseBinding = true;
+            merged.sparseResidencyImage3D = true;
+        }
+        dvz_device_config_set_features10(&dcfg, &merged);
+    }
     if (cfg->has_features12)
     {
         dvz_device_config_set_features12(&dcfg, &cfg->features12);

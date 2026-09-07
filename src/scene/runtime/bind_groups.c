@@ -899,6 +899,21 @@ void _volume_uniform_from_state(
         out->occlusion[3] = 0.0f;
     }
     out->texture_params[0] = color_role == DVZ_COLOR_ROLE_SRGB_COLOR ? 1.0f : 0.0f;
+
+    out->iso_params[0] = (float)state->iso_threshold;
+    out->iso_params[1] = state->iso_mode == DVZ_ISOSURFACE_MODE_ABOVE ? 1.0f : 0.0f;
+    out->iso_params[2] = state->iso_gradient_step;
+    out->iso_params[3] = state->iso_use_value_color ? 1.0f : 0.0f;
+    for (uint32_t i = 0; i < 4; i++)
+        out->iso_color[i] = state->iso_color[i];
+    out->iso_light[0] = state->iso_light_dir[0];
+    out->iso_light[1] = state->iso_light_dir[1];
+    out->iso_light[2] = state->iso_light_dir[2];
+    out->iso_light[3] = state->iso_shininess;
+    out->iso_material[0] = state->iso_ambient;
+    out->iso_material[1] = state->iso_diffuse;
+    out->iso_material[2] = state->iso_specular;
+    out->iso_material[3] = 0.0f;
 }
 
 

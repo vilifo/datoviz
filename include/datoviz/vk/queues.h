@@ -44,6 +44,7 @@ typedef enum
     DVZ_QUEUE_TRANSFER,     // optional async transfer
     DVZ_QUEUE_VIDEO_ENCODE, // optional
     DVZ_QUEUE_VIDEO_DECODE, // optional
+    DVZ_QUEUE_SPARSE,       // optional sparse-resource binding
     DVZ_QUEUE_COUNT,
 } DvzQueueRole;
 

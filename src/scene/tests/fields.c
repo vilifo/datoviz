@@ -3151,7 +3151,7 @@ int test_scene_volume_field_emit_realizes_3d_texture(TstContext* suite, const Ts
         {
             created_triangle_list_pipeline = true;
             if (cmd->u.create_render_pipeline.has_raster_state &&
-                cmd->u.create_render_pipeline.cull_mode == DVZ_CULL_MODE_BACK &&
+                cmd->u.create_render_pipeline.cull_mode == DVZ_CULL_MODE_FRONT &&
                 cmd->u.create_render_pipeline.front_face == DVZ_FRONT_FACE_CLOCKWISE)
             {
                 created_entry_face_pipeline = true;
@@ -4810,7 +4810,7 @@ int test_scene_image_field_resize_emits_texture_reallocation(TstContext* suite, 
         }
     }
     AT(tex1 != 0);
-    AT(tex1 == tex0);
+    AT(tex1 != tex0);
     AT(created_tex1);
     AT(wrote_resized);
     AT(!field->dirty);

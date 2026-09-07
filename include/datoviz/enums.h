@@ -1,0 +1,752 @@
+/*
+ * Copyright (c) 2021 Cyrille Rossant and contributors. All rights reserved.
+ * Licensed under the MIT license. See LICENSE file in the project root for details.
+ * SPDX-License-Identifier: MIT
+ */
+
+/*************************************************************************************************/
+/*  Scene enums                                                                                  */
+/*************************************************************************************************/
+
+#pragma once
+
+#include "datoviz/render_types.h" /* DvzPrimitiveTopology shared by scene and DRP2. */
+
+
+
+/*************************************************************************************************/
+/*  Enums                                                                                        */
+/*************************************************************************************************/
+
+typedef enum
+{
+    DVZ_FRAME_PLAN_NODE_NONE,
+    DVZ_FRAME_PLAN_NODE_UPLOAD,
+    DVZ_FRAME_PLAN_NODE_COMPUTE,
+    DVZ_FRAME_PLAN_NODE_RENDER,
+    DVZ_FRAME_PLAN_NODE_CLEAR,
+    DVZ_FRAME_PLAN_NODE_COPY,
+    DVZ_FRAME_PLAN_NODE_READBACK,
+} DvzFramePlanNodeType;
+
+
+
+/** Direction of a FramePlan copy node. */
+typedef enum
+{
+    DVZ_FRAME_PLAN_COPY_TEXTURE_TO_BUFFER = 0,
+    DVZ_FRAME_PLAN_COPY_BUFFER_TO_TEXTURE,
+} DvzFramePlanCopyDirection;
+
+
+
+/** Ambient-occlusion quality preset. */
+typedef enum
+{
+    DVZ_AO_QUALITY_LOW = 0,
+    DVZ_AO_QUALITY_MEDIUM,
+    DVZ_AO_QUALITY_HIGH,
+    DVZ_AO_QUALITY_ULTRA,
+} DvzAoQuality;
+
+
+
+/** Ambient-occlusion presentation mode. */
+typedef enum
+{
+    DVZ_AO_DEBUG_NONE = 0,
+    DVZ_AO_DEBUG_VISIBILITY,
+} DvzAoDebugMode;
+
+
+
+typedef enum
+{
+    DVZ_SCENE_SHADER_FORMAT_WGSL,
+    DVZ_SCENE_SHADER_FORMAT_GLSL,
+} DvzSceneShaderFormat;
+
+
+typedef enum
+{
+    DVZ_COLOR_PIPELINE_LINEAR_SRGB = 0,
+    DVZ_COLOR_PIPELINE_LEGACY_SRGB_BLEND = 1,
+} DvzColorPipeline;
+
+
+typedef enum
+{
+    DVZ_GRID_SIZE_WEIGHT = 0,
+    DVZ_GRID_SIZE_FIXED_PX,
+} DvzGridSizeMode;
+
+
+typedef enum
+{
+    DVZ_REFERENCE_GRID_XY = 0,
+    DVZ_REFERENCE_GRID_XZ,
+    DVZ_REFERENCE_GRID_YZ,
+    DVZ_REFERENCE_GRID_CUSTOM,
+} DvzReferenceGridPlane;
+
+
+
+typedef enum
+{
+    DVZ_SCENE_BUFFER_USAGE_NONE = 0x00u,
+    DVZ_SCENE_BUFFER_USAGE_VERTEX = 0x01u,
+    DVZ_SCENE_BUFFER_USAGE_INDEX = 0x02u,
+    DVZ_SCENE_BUFFER_USAGE_UNIFORM = 0x04u,
+    DVZ_SCENE_BUFFER_USAGE_STORAGE = 0x08u,
+    DVZ_SCENE_BUFFER_USAGE_COPY_SRC = 0x10u,
+} DvzSceneBufferUsage;
+
+
+
+typedef enum
+{
+    DVZ_VISUAL_ATTR_SOURCE_PER_ITEM = 0,
+    DVZ_VISUAL_ATTR_SOURCE_CONSTANT,
+    DVZ_VISUAL_ATTR_SOURCE_PER_SPAN,
+    DVZ_VISUAL_ATTR_SOURCE_PER_GROUP,
+} DvzVisualAttrSource;
+
+
+
+typedef enum
+{
+    DVZ_VISUAL_ATTR_MUTABILITY_DYNAMIC = 0,
+    DVZ_VISUAL_ATTR_MUTABILITY_STATIC,
+    DVZ_VISUAL_ATTR_MUTABILITY_STREAMING,
+} DvzVisualAttrMutability;
+
+
+typedef enum
+{
+    DVZ_VISUAL_TRANSFORM_NONE = 0,
+    DVZ_VISUAL_TRANSFORM_LINEAR,
+    DVZ_VISUAL_TRANSFORM_NONLINEAR,
+    DVZ_VISUAL_TRANSFORM_CUSTOM,
+} DvzVisualTransformKind;
+
+
+typedef enum
+{
+    DVZ_VISUAL_TRANSFORM_SPACE_DATA = 0,
+    DVZ_VISUAL_TRANSFORM_SPACE_VISUAL,
+    DVZ_VISUAL_TRANSFORM_SPACE_PANEL,
+} DvzVisualTransformSpace;
+
+
+/* Coordinate interpretation for retained visual positions when attached to a panel. */
+typedef enum
+{
+    DVZ_VISUAL_COORD_VIEW = 0,  /* metric panel view coordinates */
+    DVZ_VISUAL_COORD_DATA = 1,  /* default: positions are panel data/domain coordinates */
+    DVZ_VISUAL_COORD_PANEL = 2, /* normalized panel coordinates, intentionally viewport-shaped */
+    DVZ_VISUAL_COORD_PANEL_PIXEL = 3, /* panel-local logical pixels, top-left origin */
+} DvzVisualCoordSpace;
+
+
+/* Explicit scissor selection for a visual attached to a panel. */
+typedef enum
+{
+    DVZ_VISUAL_CLIP_AUTO = 0,  /* derive from generated role, visual ops, and coordinate space */
+    DVZ_VISUAL_CLIP_PANEL = 1, /* full panel scissor */
+    DVZ_VISUAL_CLIP_PLOT = 2,  /* inner plot scissor */
+} DvzVisualClipRect;
+
+
+/* Explicit viewport selection for a visual attached to a panel. */
+typedef enum
+{
+    DVZ_VISUAL_VIEWPORT_AUTO =
+        0, /* derive from generated role, visual ops, and coordinate space */
+    DVZ_VISUAL_VIEWPORT_PANEL = 1,  /* full panel viewport */
+    DVZ_VISUAL_VIEWPORT_PLOT = 2,   /* inner plot viewport */
+    DVZ_VISUAL_VIEWPORT_TARGET = 3, /* render target viewport */
+} DvzVisualViewportRect;
+
+
+/* Coordinate spaces for explicit panel point conversions. */
+typedef enum
+{
+    DVZ_PANEL_COORD_FIGURE_PX = 0, /* figure logical pixels */
+    DVZ_PANEL_COORD_PANEL_PX = 1,  /* panel-local logical pixels, origin at outer rect */
+    DVZ_PANEL_COORD_INNER_PX = 2,  /* inner-rect logical pixels, after padding */
+    DVZ_PANEL_COORD_PLOT_PX = 3,   /* plot-local logical pixels, after padding and reserve */
+    DVZ_PANEL_COORD_DATA = 4,      /* panel data/domain coordinates */
+    DVZ_PANEL_COORD_VIEW = 5,      /* panel view/visual coordinates */
+} DvzPanelCoordSpace;
+
+
+typedef enum
+{
+    DVZ_VISUAL_SHADER_NONE = 0,
+    DVZ_VISUAL_SHADER_CUSTOM_FAMILY,
+    DVZ_VISUAL_SHADER_BUILTIN_REPLACEMENT,
+} DvzVisualShaderKind;
+
+
+typedef enum
+{
+    DVZ_VISUAL_SHADER_SOURCE_NONE = 0,
+    DVZ_VISUAL_SHADER_SOURCE_GLSL,
+    DVZ_VISUAL_SHADER_SOURCE_WGSL,
+    DVZ_VISUAL_SHADER_SOURCE_SPIRV,
+} DvzVisualShaderSource;
+
+
+
+/* Whether a visual is affected by its panel's controller (panzoom/arcball). */
+typedef enum
+{
+    DVZ_CONTROLLER_APPLY = 0, /* default: panzoom/arcball MVP applies to the visual */
+    DVZ_CONTROLLER_FIXED = 1, /* visual is unaffected by navigation; identity MVP */
+    DVZ_CONTROLLER_APPLY_ISOTROPIC_LOCAL =
+        2, /* apply MVP, keep shader-generated local offsets isotropic */
+    DVZ_CONTROLLER_APPLY_VIEW_PROJ = 3, /* apply view/proj, ignore controller model */
+} DvzControllerMode;
+
+
+typedef enum
+{
+    DVZ_CONTROLLER_LINK_NONE = 0x00u,
+    DVZ_CONTROLLER_LINK_ROTATION = 0x01u,
+    DVZ_CONTROLLER_LINK_PAN = 0x02u,
+    DVZ_CONTROLLER_LINK_ZOOM = 0x04u,
+    DVZ_CONTROLLER_LINK_EXTENT_X = 0x08u,
+    DVZ_CONTROLLER_LINK_EXTENT_Y = 0x10u,
+    DVZ_CONTROLLER_LINK_CAMERA = 0x20u,
+} DvzControllerLinkComponent;
+
+
+typedef enum
+{
+    DVZ_CONTROLLER_LINK_ONE_WAY = 0,
+    /* Propagate from whichever endpoint is actively interacting, source-to-target otherwise. */
+    DVZ_CONTROLLER_LINK_TWO_WAY = 1,
+} DvzControllerLinkMode;
+
+
+
+typedef enum
+{
+    DVZ_ALPHA_OPAQUE = 0,
+    DVZ_ALPHA_BLENDED,
+    DVZ_ALPHA_WBOIT,
+    DVZ_ALPHA_DEPTH_PEEL,
+    DVZ_ALPHA_MASK,
+} DvzAlphaMode;
+
+
+typedef enum
+{
+    DVZ_BLEND_SOURCE_OVER = 0,
+    DVZ_BLEND_ADDITIVE,
+} DvzBlendMode;
+
+
+typedef enum
+{
+    DVZ_MATERIAL_MODEL_UNLIT = 0,
+    DVZ_MATERIAL_MODEL_PHONG,
+    DVZ_MATERIAL_MODEL_STANDARD,
+    DVZ_MATERIAL_MODEL_LIMB,
+} DvzMaterialModel;
+
+
+typedef enum
+{
+    DVZ_LIGHT_AMBIENT = 0,
+    DVZ_LIGHT_DIRECTIONAL,
+} DvzLightType;
+
+
+typedef enum
+{
+    DVZ_SPHERE_FLAGS_NONE = 0x0000,
+    DVZ_SPHERE_FLAGS_LIGHTING = 0x0001,
+} DvzSphereFlags;
+
+
+typedef enum
+{
+    DVZ_SPHERE_MODE_FAST_IMPOSTOR = 0,
+    DVZ_SPHERE_MODE_RAYCAST_IMPOSTOR = 1,
+} DvzSphereMode;
+
+
+typedef enum
+{
+    DVZ_SEGMENT_CAP_NONE = 0,
+    DVZ_SEGMENT_CAP_ROUND = 1,
+    DVZ_SEGMENT_CAP_TRIANGLE_IN = 2,
+    DVZ_SEGMENT_CAP_TRIANGLE_OUT = 3,
+    DVZ_SEGMENT_CAP_SQUARE = 4,
+    DVZ_SEGMENT_CAP_BUTT = 5,
+} DvzSegmentCap;
+
+
+typedef enum
+{
+    DVZ_VECTOR_ANCHOR_TAIL = 0,
+    DVZ_VECTOR_ANCHOR_CENTER = 1,
+    DVZ_VECTOR_ANCHOR_HEAD = 2,
+} DvzVectorAnchor;
+
+
+typedef enum
+{
+    DVZ_PATH_JOIN_MITER = 0,
+    DVZ_PATH_JOIN_ROUND = 1,
+    DVZ_PATH_JOIN_BEVEL = 2,
+} DvzPathJoin;
+
+
+typedef enum
+{
+    DVZ_GRAPH_EDGE_MODE_SEGMENT = 0,
+    DVZ_GRAPH_EDGE_MODE_PATH = 1,
+    DVZ_GRAPH_EDGE_MODE_BEZIER = 2,
+} DvzGraphEdgeMode;
+
+
+typedef enum
+{
+    DVZ_MARKER_SHAPE_DISC = 0,
+    DVZ_MARKER_SHAPE_SQUARE,
+    DVZ_MARKER_SHAPE_TRIANGLE,
+    DVZ_MARKER_SHAPE_DIAMOND,
+    DVZ_MARKER_SHAPE_CROSS,
+    DVZ_MARKER_SHAPE_RING,
+    DVZ_MARKER_SHAPE_TARGET,
+    DVZ_MARKER_SHAPE_ASTERISK,
+    DVZ_MARKER_SHAPE_CHEVRON,
+    DVZ_MARKER_SHAPE_CLOVER,
+    DVZ_MARKER_SHAPE_CLUB,
+    DVZ_MARKER_SHAPE_ARROW,
+    DVZ_MARKER_SHAPE_ELLIPSE,
+    DVZ_MARKER_SHAPE_HBAR,
+    DVZ_MARKER_SHAPE_HEART,
+    DVZ_MARKER_SHAPE_INFINITY,
+    DVZ_MARKER_SHAPE_PIN,
+    DVZ_MARKER_SHAPE_SPADE,
+    DVZ_MARKER_SHAPE_TAG,
+    DVZ_MARKER_SHAPE_VBAR,
+    DVZ_MARKER_SHAPE_ROUNDED_RECT,
+} DvzMarkerShape;
+
+
+typedef enum
+{
+    DVZ_SYMBOL_DISC = DVZ_MARKER_SHAPE_DISC,
+    DVZ_SYMBOL_SQUARE = DVZ_MARKER_SHAPE_SQUARE,
+    DVZ_SYMBOL_TRIANGLE = DVZ_MARKER_SHAPE_TRIANGLE,
+    DVZ_SYMBOL_DIAMOND = DVZ_MARKER_SHAPE_DIAMOND,
+    DVZ_SYMBOL_CROSS = DVZ_MARKER_SHAPE_CROSS,
+    DVZ_SYMBOL_RING = DVZ_MARKER_SHAPE_RING,
+    DVZ_SYMBOL_TARGET = DVZ_MARKER_SHAPE_TARGET,
+    DVZ_SYMBOL_ASTERISK = DVZ_MARKER_SHAPE_ASTERISK,
+    DVZ_SYMBOL_CHEVRON = DVZ_MARKER_SHAPE_CHEVRON,
+    DVZ_SYMBOL_CLOVER = DVZ_MARKER_SHAPE_CLOVER,
+    DVZ_SYMBOL_CLUB = DVZ_MARKER_SHAPE_CLUB,
+    DVZ_SYMBOL_ARROW = DVZ_MARKER_SHAPE_ARROW,
+    DVZ_SYMBOL_ELLIPSE = DVZ_MARKER_SHAPE_ELLIPSE,
+    DVZ_SYMBOL_HBAR = DVZ_MARKER_SHAPE_HBAR,
+    DVZ_SYMBOL_HEART = DVZ_MARKER_SHAPE_HEART,
+    DVZ_SYMBOL_INFINITY = DVZ_MARKER_SHAPE_INFINITY,
+    DVZ_SYMBOL_PIN = DVZ_MARKER_SHAPE_PIN,
+    DVZ_SYMBOL_SPADE = DVZ_MARKER_SHAPE_SPADE,
+    DVZ_SYMBOL_TAG = DVZ_MARKER_SHAPE_TAG,
+    DVZ_SYMBOL_VBAR = DVZ_MARKER_SHAPE_VBAR,
+    DVZ_SYMBOL_ROUNDED_RECT = DVZ_MARKER_SHAPE_ROUNDED_RECT,
+} DvzSymbolBuiltin;
+
+
+typedef enum
+{
+    DVZ_SYMBOL_SOURCE_NONE = 0,
+    DVZ_SYMBOL_SOURCE_BUILTIN,
+    DVZ_SYMBOL_SOURCE_BITMAP,
+    DVZ_SYMBOL_SOURCE_SDF,
+    DVZ_SYMBOL_SOURCE_MSDF,
+} DvzSymbolSourceKind;
+
+
+typedef enum
+{
+    DVZ_SHAPE_ASPECT_FILLED = 0,
+    DVZ_SHAPE_ASPECT_STROKE = 1,
+    DVZ_SHAPE_ASPECT_OUTLINE = 2,
+} DvzShapeAspect;
+
+
+typedef enum
+{
+    DVZ_DEPTH_CUE_NONE = 0,
+    DVZ_DEPTH_CUE_FADE_TO_BACKGROUND,
+    DVZ_DEPTH_CUE_DESATURATE,
+    DVZ_DEPTH_CUE_DARKEN,
+} DvzDepthCueMode;
+
+
+typedef enum
+{
+    DVZ_DEPTH_CUE_METRIC_CLIP_DEPTH = 0,
+    DVZ_DEPTH_CUE_METRIC_EYE_DISTANCE,
+    DVZ_DEPTH_CUE_METRIC_WORLD_DISTANCE,
+} DvzDepthCueMetric;
+
+
+typedef enum
+{
+    DVZ_DEPTH_CUE_FALLOFF_LINEAR = 0,
+    DVZ_DEPTH_CUE_FALLOFF_EXPONENTIAL,
+} DvzDepthCueFalloff;
+
+
+typedef enum
+{
+    DVZ_IMAGE_SAMPLING_LINEAR = 0,
+    DVZ_IMAGE_SAMPLING_NEAREST,
+} DvzImageSampling;
+
+
+typedef enum
+{
+    DVZ_VOLUME_SAMPLING_LINEAR = 0,
+    DVZ_VOLUME_SAMPLING_NEAREST,
+} DvzVolumeSamplingMode;
+
+
+typedef enum
+{
+    DVZ_VOLUME_RENDER_SLICE = 0,
+    DVZ_VOLUME_RENDER_MIP,
+    DVZ_VOLUME_RENDER_COMPOSITE,
+    DVZ_VOLUME_RENDER_ISOSURFACE,
+} DvzVolumeRenderMode;
+
+
+/**
+ * Isosurface crossing direction: which side of the threshold is considered "inside" the
+ * surface and is therefore the first side tested while raymarching from the camera.
+ */
+typedef enum
+{
+    DVZ_ISOSURFACE_MODE_BELOW = 0, /* surface where scalar value crosses below the threshold */
+    DVZ_ISOSURFACE_MODE_ABOVE = 1, /* surface where scalar value crosses above the threshold */
+} DvzIsosurfaceMode;
+
+
+
+typedef enum
+{
+    DVZ_VOLUME_AXIS_X = 0,
+    DVZ_VOLUME_AXIS_Y = 1,
+    DVZ_VOLUME_AXIS_Z = 2,
+} DvzVolumeAxis;
+
+
+
+typedef enum
+{
+    DVZ_SCENE_TARGET_NONE = 0,
+    DVZ_SCENE_TARGET_OBJECT,
+    DVZ_SCENE_TARGET_ITEM,
+    DVZ_SCENE_TARGET_VERTEX,
+    DVZ_SCENE_TARGET_FACE,
+    DVZ_SCENE_TARGET_PIXEL,
+    DVZ_SCENE_TARGET_SAMPLE,
+    DVZ_SCENE_TARGET_STRIP,
+    DVZ_SCENE_TARGET_SEGMENT,
+    DVZ_SCENE_TARGET_TRIANGLE,
+    DVZ_SCENE_TARGET_TEXT,
+    DVZ_SCENE_TARGET_ANNOTATION,
+    DVZ_SCENE_TARGET_GUIDE,
+    DVZ_SCENE_TARGET_ALL_RENDERED,
+} DvzSceneTargetKind;
+
+
+
+typedef enum
+{
+    DVZ_SCENE_VISUAL_FAMILY_NONE = 0,
+    DVZ_SCENE_VISUAL_FAMILY_POINT,
+    DVZ_SCENE_VISUAL_FAMILY_PIXEL,
+    DVZ_SCENE_VISUAL_FAMILY_MARKER,
+    DVZ_SCENE_VISUAL_FAMILY_SEGMENT,
+    DVZ_SCENE_VISUAL_FAMILY_VECTOR,
+    DVZ_SCENE_VISUAL_FAMILY_PATH,
+    DVZ_SCENE_VISUAL_FAMILY_IMAGE,
+    DVZ_SCENE_VISUAL_FAMILY_MESH,
+    DVZ_SCENE_VISUAL_FAMILY_VOLUME,
+    DVZ_SCENE_VISUAL_FAMILY_PRIMITIVE,
+    DVZ_SCENE_VISUAL_FAMILY_SPHERE,
+    DVZ_SCENE_VISUAL_FAMILY_GLYPH,
+    DVZ_SCENE_VISUAL_FAMILY_TEXT,
+    DVZ_SCENE_VISUAL_FAMILY_LABELS,
+    DVZ_SCENE_VISUAL_FAMILY_SPLAT,
+} DvzSceneVisualFamily;
+
+
+
+typedef enum
+{
+    DVZ_QUERY_HIT_FRONTMOST = 0,
+    DVZ_QUERY_HIT_OPAQUE_PREFERRED,
+    DVZ_QUERY_HIT_ALL,
+} DvzQueryHitPolicy;
+
+
+typedef enum
+{
+    DVZ_QUERY_PROFILE_UNSUPPORTED = 0,
+    DVZ_QUERY_PROFILE_U32_R32,
+    DVZ_QUERY_PROFILE_U64_RG32,
+    DVZ_QUERY_PROFILE_U64_2XR32,
+} DvzQueryProfile;
+
+
+typedef enum
+{
+    DVZ_QUERY_STATUS_UNKNOWN = 0,
+    DVZ_QUERY_STATUS_HIT,
+    DVZ_QUERY_STATUS_MISS,
+    DVZ_QUERY_STATUS_OUTSIDE_PANEL,
+    DVZ_QUERY_STATUS_STALE_DROPPED,
+    DVZ_QUERY_STATUS_NO_CAPABLE_VISUAL,
+    DVZ_QUERY_STATUS_UNSUPPORTED_TARGET,
+    DVZ_QUERY_STATUS_UNSUPPORTED_VISUAL_FAMILY,
+    DVZ_QUERY_STATUS_UNSUPPORTED_QUERY_PROFILE,
+    DVZ_QUERY_STATUS_UNSUPPORTED_GPU_FORMAT,
+    DVZ_QUERY_STATUS_GPU_EXEC_FAILED,
+    DVZ_QUERY_STATUS_READBACK_FAILED,
+    DVZ_QUERY_STATUS_DECODE_FAILED,
+} DvzQueryStatus;
+
+
+typedef enum
+{
+    DVZ_QUERY_VALUE_NONE = 0,
+    DVZ_QUERY_VALUE_SCALAR,
+    DVZ_QUERY_VALUE_VEC2,
+    DVZ_QUERY_VALUE_VEC3,
+    DVZ_QUERY_VALUE_VEC4,
+    DVZ_QUERY_VALUE_CATEGORY,
+    DVZ_QUERY_VALUE_TEXT,
+    DVZ_QUERY_VALUE_OPAQUE_FAMILY_PAYLOAD,
+} DvzQueryValueKind;
+
+
+
+typedef enum
+{
+    DVZ_SELECT_REPLACE = 0,
+    DVZ_SELECT_ADDITIVE,
+    DVZ_SELECT_SUBTRACT,
+    DVZ_SELECT_TOGGLE,
+} DvzSelectMode;
+
+
+typedef enum
+{
+    DVZ_ITEM_STATE_NONE = 0,
+    DVZ_ITEM_STATE_HOVERED = 1u << 0,
+    DVZ_ITEM_STATE_SELECTED = 1u << 1,
+    DVZ_ITEM_STATE_ACTIVE = 1u << 2,
+    DVZ_ITEM_STATE_LINKED = 1u << 3,
+    DVZ_ITEM_STATE_FILTERED = 1u << 4,
+    DVZ_ITEM_STATE_DISABLED = 1u << 5,
+} DvzItemStateKind;
+
+
+typedef enum
+{
+    DVZ_ITEM_STATE_VISUAL_NONE = 0,
+    DVZ_ITEM_STATE_VISUAL_ALPHA = 1u << 0,
+    DVZ_ITEM_STATE_VISUAL_TINT = 1u << 1,
+    DVZ_ITEM_STATE_VISUAL_SCALE = 1u << 2,
+} DvzItemStateVisualFlag;
+
+
+typedef enum
+{
+    DVZ_VISUAL_ATTR_FORMAT_DEFAULT = 0,
+    DVZ_VISUAL_ATTR_FORMAT_RGBA_U8,
+    DVZ_VISUAL_ATTR_FORMAT_SCALAR_F32,
+} DvzVisualAttrFormat;
+
+
+
+typedef enum
+{
+    DVZ_SCALE_CONTINUOUS = 0,
+    DVZ_SCALE_CATEGORICAL,
+} DvzScaleKind;
+
+
+
+typedef enum
+{
+    DVZ_COLORMAP_CONTINUOUS = 0,
+    DVZ_COLORMAP_CATEGORICAL,
+} DvzColormapKind;
+
+
+
+typedef enum
+{
+    DVZ_BUILTIN_COLORMAP_NONE = 0,
+    DVZ_BUILTIN_COLORMAP_VIRIDIS,
+    DVZ_BUILTIN_COLORMAP_MAGMA,
+    DVZ_BUILTIN_COLORMAP_PLASMA,
+    DVZ_BUILTIN_COLORMAP_INFERNO,
+    DVZ_BUILTIN_COLORMAP_CIVIDIS,
+    DVZ_BUILTIN_COLORMAP_TURBO,
+    DVZ_BUILTIN_COLORMAP_GRAY,
+} DvzBuiltinColormap;
+
+
+
+typedef enum
+{
+    DVZ_COLORBAR_ORIENTATION_VERTICAL = 0,
+    DVZ_COLORBAR_ORIENTATION_HORIZONTAL,
+} DvzColorbarOrientation;
+
+
+typedef enum
+{
+    DVZ_COLORBAR_PLACEMENT_ATTACHED = 0,
+    DVZ_COLORBAR_PLACEMENT_DETACHED,
+} DvzColorbarPlacementMode;
+
+
+typedef enum
+{
+    DVZ_LEGEND_PLACEMENT_ATTACHED = 0,
+    DVZ_LEGEND_PLACEMENT_DETACHED,
+} DvzLegendPlacementMode;
+
+
+
+typedef enum
+{
+    DVZ_PLACEMENT_SPACE_PANEL = 0,
+    DVZ_PLACEMENT_SPACE_FIGURE,
+} DvzPlacementSpace;
+
+
+
+typedef enum
+{
+    DVZ_HORIZONTAL_ANCHOR_LEFT = 0,
+    DVZ_HORIZONTAL_ANCHOR_CENTER,
+    DVZ_HORIZONTAL_ANCHOR_RIGHT,
+} DvzHorizontalAnchor;
+
+
+
+typedef enum
+{
+    DVZ_VERTICAL_ANCHOR_TOP = 0,
+    DVZ_VERTICAL_ANCHOR_CENTER,
+    DVZ_VERTICAL_ANCHOR_BOTTOM,
+} DvzVerticalAnchor;
+
+
+
+typedef enum
+{
+    DVZ_SCENE_ANCHOR_NONE = 0,
+    DVZ_SCENE_ANCHOR_PANEL_TOP_LEFT,
+    DVZ_SCENE_ANCHOR_PANEL_TOP,
+    DVZ_SCENE_ANCHOR_PANEL_TOP_RIGHT,
+    DVZ_SCENE_ANCHOR_PANEL_LEFT,
+    DVZ_SCENE_ANCHOR_PANEL_CENTER,
+    DVZ_SCENE_ANCHOR_PANEL_RIGHT,
+    DVZ_SCENE_ANCHOR_PANEL_BOTTOM_LEFT,
+    DVZ_SCENE_ANCHOR_PANEL_BOTTOM,
+    DVZ_SCENE_ANCHOR_PANEL_BOTTOM_RIGHT,
+    DVZ_SCENE_ANCHOR_TOP_LEFT = DVZ_SCENE_ANCHOR_PANEL_TOP_LEFT,
+    DVZ_SCENE_ANCHOR_TOP = DVZ_SCENE_ANCHOR_PANEL_TOP,
+    DVZ_SCENE_ANCHOR_TOP_RIGHT = DVZ_SCENE_ANCHOR_PANEL_TOP_RIGHT,
+    DVZ_SCENE_ANCHOR_LEFT = DVZ_SCENE_ANCHOR_PANEL_LEFT,
+    DVZ_SCENE_ANCHOR_CENTER = DVZ_SCENE_ANCHOR_PANEL_CENTER,
+    DVZ_SCENE_ANCHOR_RIGHT = DVZ_SCENE_ANCHOR_PANEL_RIGHT,
+    DVZ_SCENE_ANCHOR_BOTTOM_LEFT = DVZ_SCENE_ANCHOR_PANEL_BOTTOM_LEFT,
+    DVZ_SCENE_ANCHOR_BOTTOM = DVZ_SCENE_ANCHOR_PANEL_BOTTOM,
+    DVZ_SCENE_ANCHOR_BOTTOM_RIGHT = DVZ_SCENE_ANCHOR_PANEL_BOTTOM_RIGHT,
+    DVZ_SCENE_ANCHOR_DATA,
+    DVZ_SCENE_ANCHOR_WORLD,
+    DVZ_SCENE_ANCHOR_SCREEN,
+} DvzSceneAnchor;
+
+
+
+typedef enum
+{
+    DVZ_TEXT_PLACEMENT_SCREEN = 0,
+    DVZ_TEXT_PLACEMENT_DATA,
+    DVZ_TEXT_PLACEMENT_WORLD,
+} DvzTextPlacementMode;
+
+
+
+typedef enum
+{
+    DVZ_TEXT_RENDERER_AUTO = 0,
+    DVZ_TEXT_RENDERER_SMALL_BITMAP_ATLAS,
+    DVZ_TEXT_RENDERER_BITMAP_ATLAS,
+    DVZ_TEXT_RENDERER_MSDF_ATLAS,
+    DVZ_TEXT_RENDERER_VECTOR_GPU,
+} DvzTextRenderer;
+
+
+typedef enum
+{
+    DVZ_TEXT_ALIGN_LEFT = 0,
+    DVZ_TEXT_ALIGN_CENTER,
+    DVZ_TEXT_ALIGN_RIGHT,
+} DvzTextAlign;
+
+
+
+typedef enum
+{
+    DVZ_ANNOTATION_LABEL = 0,
+    DVZ_ANNOTATION_CALLOUT,
+    DVZ_ANNOTATION_SCALEBAR,
+    DVZ_ANNOTATION_DIMENSION,
+    DVZ_ANNOTATION_PINNED_READOUT,
+} DvzAnnotationKind;
+
+
+typedef enum
+{
+    DVZ_SCALEBAR_LABEL_ABOVE = 0,
+    DVZ_SCALEBAR_LABEL_BELOW,
+} DvzScaleBarLabelPosition;
+
+
+typedef enum
+{
+    DVZ_SCALEBAR_REFERENCE_PANEL_DOMAIN = 0,
+    DVZ_SCALEBAR_REFERENCE_WORLD_POINT,
+    DVZ_SCALEBAR_REFERENCE_VIEW_PLANE,
+} DvzScaleBarReferenceMode;
+
+
+
+typedef enum
+{
+    DVZ_QUERY_CAPABILITY_OBJECT = 0x01u,
+    DVZ_QUERY_CAPABILITY_ITEM = 0x02u,
+    DVZ_QUERY_CAPABILITY_VERTEX = 0x04u,
+    DVZ_QUERY_CAPABILITY_FACE = 0x08u,
+    DVZ_QUERY_CAPABILITY_PIXEL = 0x10u,
+    DVZ_QUERY_CAPABILITY_SAMPLE = 0x20u,
+    DVZ_QUERY_CAPABILITY_GROUP = 0x40u,
+} DvzQueryCapabilityFlag;
